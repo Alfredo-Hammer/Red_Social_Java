@@ -1,6 +1,10 @@
 package com.hammer67.ajecimface.ui.activities;
 
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.DividerItemDecoration;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.app.AlertDialog;
 import android.content.DialogInterface;
@@ -14,13 +18,23 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import com.firebase.ui.firestore.FirestoreRecyclerOptions;
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.Query;
 import com.hammer67.ajecimface.R;
+import com.hammer67.ajecimface.adapters.ComentsAdapter;
+import com.hammer67.ajecimface.adapters.PostsAdapter;
 import com.hammer67.ajecimface.adapters.SliderAdapter;
 import com.hammer67.ajecimface.fragments.ProfileFragment;
+import com.hammer67.ajecimface.models.Coments;
+import com.hammer67.ajecimface.models.Post;
 import com.hammer67.ajecimface.models.SliderItem;
+import com.hammer67.ajecimface.provider.AuthProvider;
+import com.hammer67.ajecimface.provider.ComentsProvider;
 import com.hammer67.ajecimface.provider.PostProvider;
 import com.hammer67.ajecimface.provider.UserProvider;
 import com.smarteist.autoimageslider.IndicatorView.animation.type.IndicatorAnimationType;
@@ -29,10 +43,13 @@ import com.smarteist.autoimageslider.SliderView;
 import com.squareup.picasso.Picasso;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 import es.dmoral.toasty.Toasty;
+
+import static java.security.AccessController.getContext;
 
 public class PostDetailActivity extends AppCompatActivity {
 
@@ -42,6 +59,10 @@ public class PostDetailActivity extends AppCompatActivity {
 
     PostProvider mPostProvider;
     UserProvider mUserProvider;
+    ComentsProvider mComentsProvider;
+    AuthProvider mAuthProvider;
+
+    ComentsAdapter mAdapter;
 
     String mPostExtraId;
     TextView mTextViewUserName;
@@ -53,7 +74,7 @@ public class PostDetailActivity extends AppCompatActivity {
     ImageView mImageViewCategory, mImageBack;
     CircleImageView circleImageViewProfile;
     FloatingActionButton mFabComents;
-
+    RecyclerView mRecyclerView;
 
     String mIdUser = "";
 
@@ -73,9 +94,15 @@ public class PostDetailActivity extends AppCompatActivity {
         mTextViewUserName = findViewById(R.id.textViewUsername);
         mImageBack = findViewById(R.id.imageBack);
         mFabComents = findViewById(R.id.fabComents);
+        mRecyclerView = findViewById(R.id.recyclerViewComent);
+
+        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this);
+        mRecyclerView.setLayoutManager(linearLayoutManager);
 
         mPostProvider = new PostProvider();
         mUserProvider = new UserProvider();
+        mComentsProvider = new ComentsProvider();
+        mAuthProvider = new AuthProvider();
 
         mPostExtraId = getIntent().getStringExtra("id");
 
@@ -101,6 +128,23 @@ public class PostDetailActivity extends AppCompatActivity {
         });
 
         getPost();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Query query = mComentsProvider.getComentsByPost(mPostExtraId);
+        FirestoreRecyclerOptions<Coments> options = new FirestoreRecyclerOptions.Builder<Coments>().setQuery(query,Coments.class).build();
+
+        mAdapter = new ComentsAdapter(options,PostDetailActivity.this);
+        mRecyclerView.setAdapter(mAdapter);
+        mAdapter.startListening();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        mAdapter.stopListening();
     }
 
     private void showDialogComents() {
@@ -133,6 +177,12 @@ public class PostDetailActivity extends AppCompatActivity {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 String value = editText.getText().toString();
+                if (!value.isEmpty()){
+                    createComent(value);
+                }
+                else {
+                    Toasty.warning(PostDetailActivity.this,"Debes escribir un comentario",Toasty.LENGTH_SHORT).show();
+                }
 
             }
         });
@@ -145,6 +195,25 @@ public class PostDetailActivity extends AppCompatActivity {
         });
 
         builder.show();
+    }
+
+    private void createComent(String value) {
+        Coments coments = new Coments();
+        coments.setComents(value);
+        coments.setIdPost(mPostExtraId);
+        coments.setIdUser(mAuthProvider.getUid());
+        coments.setTimestamp(new Date().getTime());
+
+        mComentsProvider.create(coments).addOnCompleteListener(new OnCompleteListener<Void>() {
+            @Override
+            public void onComplete(@NonNull Task<Void> task) {
+                if (task.isSuccessful()){
+                    Toasty.success(PostDetailActivity.this,"Comentario publicado con exito",Toasty.LENGTH_SHORT).show();
+                }else {
+                    Toasty.error(PostDetailActivity.this,"No se pudo publicar el comentario",Toasty.LENGTH_SHORT).show();
+                }
+            }
+        });
     }
 
     private void goToShowProfile() {
