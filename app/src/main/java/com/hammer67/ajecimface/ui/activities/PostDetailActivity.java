@@ -2,6 +2,7 @@ package com.hammer67.ajecimface.ui.activities;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -31,11 +32,15 @@ import com.hammer67.ajecimface.adapters.PostsAdapter;
 import com.hammer67.ajecimface.adapters.SliderAdapter;
 import com.hammer67.ajecimface.fragments.ProfileFragment;
 import com.hammer67.ajecimface.models.Coments;
+import com.hammer67.ajecimface.models.FCMBody;
+import com.hammer67.ajecimface.models.FCMResponse;
 import com.hammer67.ajecimface.models.Post;
 import com.hammer67.ajecimface.models.SliderItem;
 import com.hammer67.ajecimface.provider.AuthProvider;
 import com.hammer67.ajecimface.provider.ComentsProvider;
+import com.hammer67.ajecimface.provider.NotificationProvider;
 import com.hammer67.ajecimface.provider.PostProvider;
+import com.hammer67.ajecimface.provider.TokenProvider;
 import com.hammer67.ajecimface.provider.UserProvider;
 import com.smarteist.autoimageslider.IndicatorView.animation.type.IndicatorAnimationType;
 import com.smarteist.autoimageslider.SliderAnimations;
@@ -44,10 +49,15 @@ import com.squareup.picasso.Picasso;
 
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 import es.dmoral.toasty.Toasty;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 import static java.security.AccessController.getContext;
 
@@ -61,6 +71,8 @@ public class PostDetailActivity extends AppCompatActivity {
     UserProvider mUserProvider;
     ComentsProvider mComentsProvider;
     AuthProvider mAuthProvider;
+    NotificationProvider mNotificationProvider;
+    TokenProvider mTokenProvider;
 
     ComentsAdapter mAdapter;
 
@@ -71,10 +83,11 @@ public class PostDetailActivity extends AppCompatActivity {
     TextView mTextViewDescription;
     TextView mTextViewPhone;
     TextView mTextViewNameCategory;
-    ImageView mImageViewCategory, mImageBack;
+    ImageView mImageViewCategory;
     CircleImageView circleImageViewProfile;
     FloatingActionButton mFabComents;
     RecyclerView mRecyclerView;
+    Toolbar mToolbar;
 
     String mIdUser = "";
 
@@ -92,9 +105,14 @@ public class PostDetailActivity extends AppCompatActivity {
         circleImageViewProfile = findViewById(R.id.circleImageProfile);
         mTextViewShowProfile = findViewById(R.id.textViewShowProfile);
         mTextViewUserName = findViewById(R.id.textViewUsername);
-        mImageBack = findViewById(R.id.imageBack);
         mFabComents = findViewById(R.id.fabComents);
         mRecyclerView = findViewById(R.id.recyclerViewComent);
+        mToolbar = findViewById(R.id.toolbar);
+
+
+        setSupportActionBar(mToolbar);
+        getSupportActionBar().setTitle("");
+        getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         LinearLayoutManager linearLayoutManager = new LinearLayoutManager(this);
         mRecyclerView.setLayoutManager(linearLayoutManager);
@@ -103,6 +121,8 @@ public class PostDetailActivity extends AppCompatActivity {
         mUserProvider = new UserProvider();
         mComentsProvider = new ComentsProvider();
         mAuthProvider = new AuthProvider();
+        mNotificationProvider = new NotificationProvider();
+        mTokenProvider = new TokenProvider();
 
         mPostExtraId = getIntent().getStringExtra("id");
 
@@ -110,13 +130,6 @@ public class PostDetailActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 showDialogComents();
-            }
-        });
-
-        mImageBack.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                finish();
             }
         });
 
@@ -134,9 +147,9 @@ public class PostDetailActivity extends AppCompatActivity {
     protected void onStart() {
         super.onStart();
         Query query = mComentsProvider.getComentsByPost(mPostExtraId);
-        FirestoreRecyclerOptions<Coments> options = new FirestoreRecyclerOptions.Builder<Coments>().setQuery(query,Coments.class).build();
+        FirestoreRecyclerOptions<Coments> options = new FirestoreRecyclerOptions.Builder<Coments>().setQuery(query, Coments.class).build();
 
-        mAdapter = new ComentsAdapter(options,PostDetailActivity.this);
+        mAdapter = new ComentsAdapter(options, PostDetailActivity.this);
         mRecyclerView.setAdapter(mAdapter);
         mAdapter.startListening();
     }
@@ -177,11 +190,10 @@ public class PostDetailActivity extends AppCompatActivity {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 String value = editText.getText().toString();
-                if (!value.isEmpty()){
+                if (!value.isEmpty()) {
                     createComent(value);
-                }
-                else {
-                    Toasty.warning(PostDetailActivity.this,"Debes escribir un comentario",Toasty.LENGTH_SHORT).show();
+                } else {
+                    Toasty.warning(PostDetailActivity.this, "Debes escribir un comentario", Toasty.LENGTH_SHORT).show();
                 }
 
             }
@@ -207,10 +219,53 @@ public class PostDetailActivity extends AppCompatActivity {
         mComentsProvider.create(coments).addOnCompleteListener(new OnCompleteListener<Void>() {
             @Override
             public void onComplete(@NonNull Task<Void> task) {
-                if (task.isSuccessful()){
-                    Toasty.success(PostDetailActivity.this,"Comentario publicado con exito",Toasty.LENGTH_SHORT).show();
-                }else {
-                    Toasty.error(PostDetailActivity.this,"No se pudo publicar el comentario",Toasty.LENGTH_SHORT).show();
+                if (task.isSuccessful()) {
+                    sendNotification(value);
+                    Toasty.success(PostDetailActivity.this, "Comentario publicado con exito", Toasty.LENGTH_SHORT).show();
+                } else {
+                    Toasty.error(PostDetailActivity.this, "No se pudo publicar el comentario", Toasty.LENGTH_SHORT).show();
+                }
+            }
+        });
+    }
+
+    private void sendNotification(String coment) {
+        if (mIdUser != null) {
+            return;
+        }
+        mTokenProvider.getToken(mIdUser).addOnSuccessListener(new OnSuccessListener<DocumentSnapshot>() {
+            @Override
+            public void onSuccess(DocumentSnapshot documentSnapshot) {
+                if (documentSnapshot.exists()) {
+                    if (documentSnapshot.contains("token")) {
+                        String token = documentSnapshot.getString("token");
+                        Map<String, String> data = new HashMap<>();
+                        data.put("title", "NUEVO COMENTARIO");
+                        data.put("body", coment);
+                        FCMBody body = new FCMBody(token, "high", "4500", data);
+                        mNotificationProvider.sendNotification(body).enqueue(new Callback<FCMResponse>() {
+                            @Override
+                            public void onResponse(Call<FCMResponse> call, Response<FCMResponse> response) {
+                                if (response.body() != null) {
+                                    if (response.body().getSuccess() == 1) {
+                                        Toasty.success(PostDetailActivity.this, "La notificacion se envio correctamente", Toasty.LENGTH_SHORT).show();
+                                    } else {
+                                        Toasty.error(PostDetailActivity.this, "La notificacion no se envio correctamente", Toasty.LENGTH_SHORT).show();
+                                    }
+                                } else {
+                                    Toasty.error(PostDetailActivity.this, "La notificacion no se envio correctamente", Toasty.LENGTH_SHORT).show();
+
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(Call<FCMResponse> call, Throwable t) {
+
+                            }
+                        });
+                    }
+                } else {
+                    Toasty.error(PostDetailActivity.this, "Token de notificaciones del usuario no existe", Toasty.LENGTH_SHORT).show();
                 }
             }
         });
@@ -268,12 +323,24 @@ public class PostDetailActivity extends AppCompatActivity {
                         String category = documentSnapshot.getString("category");
                         mTextViewNameCategory.setText(category);
 
-                       /* if (category.equals("PS4")){
-                            mImageViewCategory.setImageResource(R.drawable.iglesianic);
+                        if (category.equals("Iglesia Nicaragua")) {
+                            mImageViewCategory.setImageResource(R.drawable.nicaragua);
+
+                        } else if (category.equals("Iglesia Panama")) {
+                            mImageViewCategory.setImageResource(R.drawable.panama);
+
+                        } else if (category.equals("Iglesia Costa Rica")) {
+                            mImageViewCategory.setImageResource(R.drawable.nicaragua);
+
+                        } else if (category.equals("Iglesia Honduras")) {
+                            mImageViewCategory.setImageResource(R.drawable.panama);
+
+                        } else if (category.equals("Iglesia Estados Unidos")) {
+                            mImageViewCategory.setImageResource(R.drawable.nicaragua);
+
+                        } else if (category.equals("Iglesia Suecia")) {
+                            mImageViewCategory.setImageResource(R.drawable.nicaragua);
                         }
-                        else if (category.equals("XBox")){
-                            mImageViewCategory.setImageResource(R.drawable.iglesianic);
-                        }*/
                     }
                     if (documentSnapshot.contains("idUser")) {
                         mIdUser = documentSnapshot.getString("idUser");

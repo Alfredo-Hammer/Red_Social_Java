@@ -1,6 +1,8 @@
 package com.hammer67.ajecimface.adapters;
 
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -49,6 +51,7 @@ public class MyPostsAdapter extends FirestoreRecyclerAdapter<Post, MyPostsAdapte
     public MyPostsAdapter(@NonNull FirestoreRecyclerOptions<Post> options, Context context) {
         super(options);
         this.context = context;
+
         mUserProvider = new UserProvider();
         mLikesProvider = new LikesProvider();
         mAuthProvider = new AuthProvider();
@@ -65,6 +68,14 @@ public class MyPostsAdapter extends FirestoreRecyclerAdapter<Post, MyPostsAdapte
         String relativeTime = RelativeTime.getTimeAgo(post.getTimestamp(), context);
         holder.textViewRelativeTime.setText(relativeTime);
         holder.textViewTitle.setText(post.getTitle());
+
+        if (post.getIdUser().equals(mAuthProvider.getUid())){
+            holder.imageViewDelete.setVisibility(View.VISIBLE);
+        }
+        else {
+            holder.imageViewDelete.setVisibility(View.GONE);
+
+        }
 
         if (post.getImage1() != null) {
             if (!post.getImage1().isEmpty()) {
@@ -84,9 +95,27 @@ public class MyPostsAdapter extends FirestoreRecyclerAdapter<Post, MyPostsAdapte
         holder.imageViewDelete.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                deletePost(postId);
+               showConfirmDelete(postId);
             }
         });
+
+    }
+
+    private void showConfirmDelete(String postId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context)
+                .setIcon(R.drawable.ic_baseline_alert);
+        builder.setTitle("Eliminar una publicacion");
+        builder.setMessage("Estas seguro de eliminar el post?")
+                .setPositiveButton("Si", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        deletePost(postId);
+                    }
+                })
+
+                .setNegativeButton("No", null)
+                .show();
+
 
     }
 
@@ -121,7 +150,7 @@ public class MyPostsAdapter extends FirestoreRecyclerAdapter<Post, MyPostsAdapte
             super(itemView);
 
             textViewTitle = itemView.findViewById(R.id.textViewUserTitleMyPost);
-            textViewRelativeTime = itemView.findViewById(R.id.textViewUseRelativeTimeMyPost);
+            textViewRelativeTime = itemView.findViewById(R.id.textViewRelativeTimeMyPost);
             circleImageViewPost = itemView.findViewById(R.id.circleImageMyPost);
             imageViewDelete = itemView.findViewById(R.id.imageViewDeleteMyPost);
 

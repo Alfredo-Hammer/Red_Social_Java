@@ -11,7 +11,7 @@ public class ComentsProvider {
     CollectionReference mCollection;
 
     public ComentsProvider() {
-        mCollection = FirebaseFirestore.getInstance().collection("coments");
+        mCollection = FirebaseFirestore.getInstance().collection("Coments");
     }
 
     public Task<Void> create(Coments coments){

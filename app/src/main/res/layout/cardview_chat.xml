@@ -16,7 +16,7 @@
         android:orientation="horizontal">
 
         <de.hdodenhof.circleimageview.CircleImageView
-            android:id="@+id/circleImageMyPost"
+            android:id="@+id/circleImageChat"
             android:layout_width="45dp"
             android:layout_height="45dp"
             android:src="@drawable/ic_baseline_person_grey"
@@ -32,7 +32,7 @@
             android:layout_marginLeft="10dp">
 
             <TextView
-                android:id="@+id/textViewUserTitleMyPost"
+                android:id="@+id/textViewUsernameChat"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Titulo de a publicaion"
@@ -40,21 +40,15 @@
                 android:maxLines="1"/>
 
             <TextView
-                android:id="@+id/textViewRelativeTimeMyPost"
+                android:id="@+id/textViewLastMessageChat"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:maxLines="1"
-                android:text="Hace 0 min"
+                android:text="ultimo usuario"
                 android:textSize="12sp" />
 
 
         </LinearLayout>
-
-        <ImageView
-            android:id="@+id/imageViewDeleteMyPost"
-            android:layout_width="35dp"
-            android:layout_height="35dp"
-            android:src="@drawable/ic_baseline_cancel"/>
 
     </LinearLayout>
 
